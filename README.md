@@ -5,11 +5,13 @@
 ## 技术栈
 
 - **框架**: Spring Boot 3.2.5
-- **构建工具**: Maven
+- **构建工具**: Maven 3.9.x
 - **数据库**: SQLite
 - **ORM**: Spring Data JPA + Hibernate
-- **JDK版本**: Java 17
+- **JDK版本**: Eclipse Temurin 21.0.10+7
+- **打包方式**: WAR
 - **其他**: Lombok
+- **CI/CD**: GitHub Actions
 
 ## 项目结构
 
@@ -101,10 +103,10 @@ main/
 
 ### 前置要求
 
-- JDK 21
-- Maven 3.6+
+- **JDK**: Eclipse Temurin 21.0.10+7
+- **Maven**: 3.9.x
 
-### 运行步骤
+### 本地运行步骤
 
 1. **编译项目**
    ```bash
@@ -117,12 +119,86 @@ main/
    ```
    或者
    ```bash
-   java -jar target/student-score-system-1.0.0.jar
+   java -jar target/school.war
    ```
 
 3. **访问接口**
    - 服务端口: 8080
    - 接口基础地址: http://localhost:8080/api/
+
+### WAR包部署
+
+编译后生成 `target/school.war`，可部署到Tomcat或其他Servlet容器：
+- 部署路径: `$TOMCAT_HOME/webapps/`
+- 访问路径: http://服务器地址:端口/school/
+
+---
+
+## CI/CD 自动化部署 (GitHub Actions)
+
+项目已配置GitHub Actions实现自动化CI/CD流程，配置文件位于 `.github/workflows/maven.yml`
+
+### 触发条件
+- `public` 分支有代码提交时自动触发
+
+### 环境要求
+- **JDK**: Eclipse Temurin 21.0.10+7
+- **Maven**: 3.9.6
+
+### 部署流程
+1. 代码检出
+2. JDK和Maven环境搭建
+3. Maven编译打包生成 `school.war`
+4. 通过SCP将war包部署到远程服务器
+
+### 服务器配置
+- **目标服务器**: test.stoprefactoring.com:22
+- **部署路径**: /public/backend/school.war (覆盖模式)
+
+### GitHub Secrets配置
+需要在仓库Settings中配置以下Secrets：
+- `SSH_USERNAME`: SSH登录用户名
+- `SSH_PRIVATE_KEY`: SSH私钥内容
+
+---
+
+## 安全检查报告
+
+### 1. SQL注入检查（重点检查）
+
+**检查结果**: ✅ **安全 - 无SQL盲注风险**
+
+**详细说明**:
+- 项目使用Spring Data JPA框架，所有数据库操作均通过方法命名查询实现
+- Repository层未使用 `@Query` 原生SQL注解
+- 无字符串拼接SQL语句的情况
+- 所有查询参数均通过JPA框架进行参数化处理
+
+### 2. 其他安全风险检查及建议
+
+| 风险项 | 风险等级 | 状态 | 改进建议 |
+|--------|----------|------|----------|
+| **认证授权缺失** | 🔴 高 | 存在 | 建议添加Spring Security实现JWT认证和角色权限控制 |
+| **输入验证缺失** | 🟠 中 | 存在 | Controller层添加`@Validated`校验，使用Hibernate Validator进行参数校验 |
+| **数据库无密码** | 🟠 中 | 存在 | 生产环境建议更换为MySQL/PostgreSQL并配置强密码 |
+| **SQL日志泄露** | 🟡 低 | 存在 | 生产环境关闭`show-sql: true`，避免SQL语句泄露 |
+| **异常信息暴露** | 🟡 低 | 存在 | 添加全局异常处理器，避免敏感堆栈信息返回给前端 |
+| **HTTPS未配置** | 🟠 中 | 存在 | 生产环境配置SSL证书，启用HTTPS |
+| **CORS未配置** | 🟡 低 | 存在 | 添加CORS配置，限制跨域访问来源 |
+| **速率限制缺失** | 🟡 低 | 存在 | 建议添加Bucket4j实现API接口限流，防止暴力攻击 |
+
+### 3. 安全加固建议
+
+#### 立即改进项（高优先级）：
+1. 引入Spring Security依赖，实现API接口认证
+2. 生产环境关闭SQL日志打印
+3. 配置全局异常处理器，统一错误响应格式
+
+#### 中长期改进项：
+1. 实现接口幂等性
+2. 添加请求日志审计
+3. 配置数据库连接池监控
+4. 定期更新依赖版本，修复已知CVE漏洞
 
 ---
 
