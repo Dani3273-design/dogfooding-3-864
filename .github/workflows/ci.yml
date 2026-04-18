@@ -1,0 +1,50 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ public ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK Temurin 21.0.10+7
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21.0.10+7'
+        distribution: 'temurin'
+        check-latest: false
+
+    - name: Set up Maven 3.9
+      uses: stCarolas/setup-maven@v5
+      with:
+        maven-version: 3.9.6
+
+    - name: Verify Java and Maven versions
+      run: |
+        java -version
+        mvn -version
+
+    - name: Build with Maven
+      run: mvn clean package -DskipTests
+
+    - name: Verify WAR file
+      run: |
+        ls -la target/
+        test -f target/school.war && echo "✅ school.war generated successfully" || echo "❌ school.war not found"
+
+    - name: Deploy to server via SSH
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: test.stoprefactoring.com
+        port: 22
+        username: ${{ secrets.SSH_USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        source: target/school.war
+        target: /public/backend/
+        strip_components: 2
+        overwrite: true
