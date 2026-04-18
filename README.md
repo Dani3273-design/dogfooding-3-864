@@ -5,10 +5,11 @@
 ## 技术栈
 
 - **框架**: Spring Boot 3.2.5
-- **构建工具**: Maven
+- **构建工具**: Maven 3.9
 - **数据库**: SQLite
 - **ORM**: Spring Data JPA + Hibernate
-- **JDK版本**: Java 17
+- **JDK版本**: Eclipse Temurin JDK 21.0.10+7
+- **打包方式**: WAR包
 - **其他**: Lombok
 
 ## 项目结构
@@ -377,3 +378,72 @@ DELETE /api/scores/student/1
 2. Hibernate配置为 `ddl-auto: update`，会自动创建和更新表结构
 3. 学号具有唯一性约束，重复学号会抛出异常
 4. 开启了SQL日志打印，可在控制台查看执行的SQL语句
+
+---
+
+## DevOps CI/CD 说明
+
+### GitHub Actions 自动构建部署
+
+项目已配置GitHub Actions CI/CD流水线，实现自动化构建和部署。
+
+#### 触发条件
+- 当 `public` 分支有新代码提交时自动触发
+
+#### 技术约束
+- **JDK版本**: Eclipse Temurin 21.0.10+7
+- **Maven版本**: 3.9.x
+
+#### 构建流程
+1. 检出代码
+2. 配置JDK和Maven环境
+3. 执行Maven构建，生成WAR包
+4. 打包产物重命名为 `school.war`
+5. 通过SSH密钥自动部署到远程服务器
+
+#### 部署信息
+- **目标服务器**: `test.stoprefactoring.com:22`
+- **部署路径**: `/public/backend/school.war` (覆盖式部署)
+
+#### 配置密钥（必需）
+在GitHub仓库Settings -> Secrets and variables -> Actions中添加以下Secrets：
+```
+SSH_USERNAME: 服务器SSH用户名
+SSH_PRIVATE_KEY: SSH私钥内容
+```
+
+---
+
+## 安全检查报告
+
+### 1. SQL注入漏洞检查
+✅ **检查结果：未发现SQL盲注/注入漏洞**
+
+- 项目使用Spring Data JPA框架，所有数据库操作均通过方法名查询（如`findByStudentNo`、`findByMajor`等）实现
+- 未使用原生SQL字符串拼接
+- 所有查询参数自动通过JPA进行参数化处理，有效防止SQL注入攻击
+
+### 2. 其他安全检查项及改进建议
+
+| 检查项 | 风险等级 | 说明 | 改进建议 |
+|--------|----------|------|----------|
+| **输入验证** | ⚠️ 中风险 | Controller层直接接收请求体，缺少参数合法性校验 | 添加JSR-380 Bean Validation (`@Valid`、`@NotBlank`、`@Size`、`@Range`等注解) |
+| **认证授权** | 🔴 高风险 | 所有API接口公开，无身份认证和权限控制 | 集成Spring Security，实现JWT Token认证，添加角色权限控制 |
+| **异常处理** | ⚠️ 中风险 | 直接抛出RuntimeException，可能泄露敏感信息 | 添加全局`@ControllerAdvice`统一异常处理，自定义业务异常类 |
+| **XSS防护** | ⚠️ 中风险 | 缺少输入输出XSS过滤 | 添加XSS过滤器，对请求参数进行HTML特殊字符转义 |
+| **数据库安全** | ⚠️ 中风险 | SQLite数据库未设置密码 | 生产环境建议使用MySQL/PostgreSQL并配置强密码 |
+| **速率限制** | ⚠️ 中风险 | 无API请求频率限制 | 添加Bucket4j或Spring Cloud Gateway限流，防止DoS攻击 |
+| **HTTPS配置** | 🔴 高风险 | 默认使用HTTP明文传输 | 生产环境配置SSL证书，启用HTTPS，配置HSTS |
+| **敏感数据** | ⚠️ 中风险 | 实体类使用`@Data`可能在日志中泄露字段值 | 对敏感字段添加`@ToString.Exclude`，配置日志脱敏 |
+
+### 3. 推荐安全加固优先级
+
+**高优先级立即实施**:
+1. 添加用户认证授权机制（Spring Security + JWT）
+2. 生产环境启用HTTPS
+3. 添加全局异常处理，隐藏堆栈信息
+
+**中优先级逐步实施**:
+1. 完善接口参数校验
+2. 添加API访问速率限制
+3. 配置XSS和CSRF防护
